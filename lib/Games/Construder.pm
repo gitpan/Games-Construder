@@ -24,7 +24,7 @@ our @EXPORT = qw/
    ctr_prof
 /;
 
-our $VERSION = '0.92';
+our $VERSION = '0.93';
 
 use XSLoader;
 XSLoader::load "Games::Construder", $Games::Construder::VERSION;
@@ -299,23 +299,6 @@ sub init {
    if ($SHELL) {
       warn "started shell at $sock, use with: 'socat readline $sock'\n";
    }
-}
-
-package AnyEvent::Debug::shell;
-use common::sense;
-use Data::Dumper;
-
-sub d {
-   my ($d) = @_;
-   Dumper ($d)
-}
-
-sub wf {
-   my ($name, $data) = @_;
-   open my $fh, ">", "/tmp/$name.debug"
-      or die "Couldn't open /tmp/$name.debug: $!\n";
-   binmode $fh;
-   print $fh $data;
 }
 
 =back
