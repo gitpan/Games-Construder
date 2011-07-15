@@ -38,22 +38,15 @@ use Games::Construder::Client::World;
 use Games::Construder::Client::Resources;
 use Games::Construder::UI;
 use Games::Construder::Client::UI;
+use Games::Construder::Logging;
 
 use base qw/Object::Event/;
 
 =head1 NAME
 
-Games::Construder::Client::Frontend - desc
-
-=head1 SYNOPSIS
-
-=head1 DESCRIPTION
-
-=head1 METHODS
+Games::Construder::Client::Frontend - Client Rendering, Physics, Keyboard handling and UI management
 
 =over 4
-
-=item my $obj = Games::Construder::Client::Frontend->new (%args)
 
 =cut
 
@@ -572,15 +565,16 @@ sub render_scene {
       }
       my $tok = time - $tc;
 
-#d#      if ($tok > $tleft) {
-#d#         warn "compiled $cnt chunks in $tok, but only had $tleft ($ac) left, but "
-#d#              . scalar (@compl_end) . " chunks still to compile...\n";
-#d#      }
+      if ($tok > $tleft) {
+         ctr_log (debug =>
+            "compiled $cnt chunks in $tok, but only had $tleft ($ac) left, but "
+            . scalar (@compl_end) . " chunks still to compile...");
+      }
 
       (@compl_end) = ();
 
       if (@request) {
-#d#         warn "requesting " . scalar (@request) . " chnks\n";
+         ctr_log (debug => "requesting %d chnks", scalar (@request));
          $self->visible_chunks_changed ([], [], \@request);
       }
    }
@@ -676,10 +670,11 @@ sub handle_sdl_events {
          $self->resize_app ($sdle->resize_w, $sdle->resize_h);
 
       } elsif ($type == 12) {
-         warn "Exit event!\n";
+         ctr_log (info => "received sdl exit");
          exit;
+
       } else {
-         warn "unknown sdl type: $type\n";
+         ctr_log (debug => "unknown sdl event type: %d", $type);
       }
    }
 
@@ -694,8 +689,8 @@ sub setup_event_poller {
    my $fps_intv = 0.8;
    $self->{fps_w} = AE::timer 0, $fps_intv, sub {
       #printf "%.5f FPS\n", $fps / $fps_intv;
-      printf "%.5f secsPcoll\n", $collide_time / $collide_cnt if $collide_cnt;
-      printf "%.5f secsPrender\n", $render_time / $render_cnt if $render_cnt;
+      ctr_log (profile => "%.5f secsPcoll", $collide_time / $collide_cnt) if $collide_cnt;
+      ctr_log (profile => "%.5f secsPrender", $render_time / $render_cnt) if $render_cnt;
       $self->activate_ui (hud_fps =>
          ui_hud_window_transparent (
             pos => [left => 'up'],
@@ -753,7 +748,7 @@ sub setup_event_poller {
       my $dlta = $start_time - $last_frame;
       if ($dlta > $frame_time) {
          $dlta -= $frame_time;
- #d#        warn "frame too late, delta is $dlta\n";
+         ctr_log (profile => "frame too late, delta is %f", $dlta);
       }
 
       $self->handle_sdl_events;
@@ -945,6 +940,7 @@ sub physics_tick : event_cb {
    #d#   $gforce = [0, 9.5, 0];
    #d#}
    $gforce = [0,0,0] if $self->{ghost_mode};
+   $gforce = vsmul ($gforce, -1) if $self->{upboost};
 
    if ($self->{ghost_mode}) {
       $player->{vel} = [0, 0, 0];
@@ -997,6 +993,7 @@ sub physics_tick : event_cb {
           }
           #d# warn "downpart $down_part\n";
           vismul ($player->{vel}, $down_part);
+
       } elsif ($collide_normal == 1) {
          $self->msg ("Emergency Teleport Activated. You were teleported to a free spot so you are not intermixed with something solid!");
       }
@@ -1047,6 +1044,8 @@ sub input_key_up : event_cb {
       $self->{movement}->{speed} = 0;
    } elsif ($name eq 'left ctrl') {
       $self->{air_select_mode} = 0;
+   } elsif ($name eq 'space') {
+      $self->{upboost} = 0;
    }
 
 }
@@ -1058,7 +1057,7 @@ sub show_video_settings {
       ui_pad_box (hor =>
          ui_desc ("Ambien light: "),
          ui_subdesc (sprintf "%0.2f", $self->{res}->{config}->{ambient_light}),
-         ui_range (ambl => 0.0, 0.3, 0.05, "%0.2f",
+         ui_range (ambl => 0.0, 0.4, 0.05, "%0.2f",
                    $self->{res}->{config}->{ambient_light}),
       ),
       ui_pad_box (hor =>
@@ -1173,7 +1172,7 @@ sub show_key_help {
             "left shift",  "Hold to speedup [w/s/a/d] movement."),
          ui_key_explain (
             "space",
-            "Jump / Give upward boost (you can fly by repeatedly hitting this)."),
+            "Jump / Give upward thrust."),
          ui_key_explain (
             "f",
             "Toggle mouse look."),
@@ -1366,11 +1365,12 @@ sub input_key_down : event_cb {
       return;
    }
 
-   warn "Key down $key ($name)\n";
+   ctr_log (debug => "key press %s (%s)", $key, $name);
 
    my $move_x;
 
    if ($name eq 'space') {
+      $self->{upboost} = 1;
       viaddd ($self->{phys_obj}->{player}->{vel}, 0, 5, 0);
    } elsif ($name eq 'g') {
       $self->{ghost_mode} = not $self->{ghost_mode};
@@ -1452,7 +1452,7 @@ sub visibility_radius : event_cb {
    $FAR_PLANE = ($radius * 12) * 0.7;
    glFogf (GL_FOG_START, $FAR_PLANE - 20);
    glFogf (GL_FOG_END,   $FAR_PLANE - 1);
-   warn "RADIUS $PL_VIS_RAD\n";
+   ctr_log (info => "changed visibility radius to %d", $PL_VIS_RAD);
 }
 
 =back
@@ -1460,8 +1460,6 @@ sub visibility_radius : event_cb {
 =head1 AUTHOR
 
 Robin Redeker, C<< <elmex@ta-sa.org> >>
-
-=head1 SEE ALSO
 
 =head1 COPYRIGHT & LICENSE
 

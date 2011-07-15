@@ -12,6 +12,42 @@
 #include "volume_draw.c"
 #include "light.c"
 
+double region_get_sector_value (void *reg, int x, int y, int z)
+{
+  if (!reg)
+     return 0;
+
+  vec3_init (secpos, x, y, z);
+  double l = fabs (vec3_len (secpos));
+  if (l < 1)
+    return 1.85; // the core
+  else if (l < 200
+           && ((abs (x) < 1 && abs (y) < 1)
+               || (abs (z) < 1 && abs (y) < 1)
+               || (abs (x) < 1 && abs (z) < 1)))
+    return 1.65; // the axis, going from center to the outer construct connection
+  else if (l < 30 // here we check the void: void is in the inner shell surface
+           || (l > 130 // and beyond the outer shell surface, but only if inside the
+                       // huge construct cube which spans 200 in each direction
+               && (abs (x) < 200 && abs (y) < 200 && abs (z) < 200)))
+    return 1.55; // the void
+  else // we are in the sphere shell around that
+    {
+      double *region = reg;
+      int reg_size = region[0];
+      region++;
+
+      if (x < 0) x = -x;
+      if (y < 0) y = -y;
+      if (z < 0) z = -z;
+      x %= reg_size;
+      y %= reg_size;
+      z %= reg_size;
+
+      return region[x + y * reg_size + z * reg_size * reg_size];
+    }
+}
+
 unsigned int ctr_cone_sphere_intersect (double cam_x, double cam_y, double cam_z, double cam_v_x, double cam_v_y, double cam_v_z, double cam_fov, double sphere_x, double sphere_y, double sphere_z, double sphere_rad)
 {
   vec3_init(cam,    cam_x, cam_y, cam_z);
@@ -327,88 +363,6 @@ ctr_world_chunk_visible_faces (int x, int y, int z)
   OUTPUT:
     RETVAL
 
-void
-ctr_world_test_binsearch ()
-  CODE:
-    ctr_axis_array arr;
-    arr.alloc = 0;
-
-    printf ("TESTING...\n");
-    ctr_axis_array_insert_at (&arr, 0,  10, (void *) 10);
-    ctr_axis_array_insert_at (&arr, 1, 100, (void *) 100);
-    ctr_axis_array_insert_at (&arr, 2, 320, (void *) 320);
-    ctr_axis_array_insert_at (&arr, 1,  11, (void *) 11);
-    ctr_axis_array_insert_at (&arr, 0,  9, (void *) 9);
-    ctr_axis_array_insert_at (&arr, 5,  900, (void *) 900);
-    ctr_axis_array_dump (&arr);
-
-    printf ("SERACHING...\n");
-    ctr_axis_node *an = 0;
-    int idx = ctr_axis_array_find (&arr, 12, &an);
-    printf ("IDX %d %p\n",idx, an);
-    idx = ctr_axis_array_find (&arr, 13, &an);
-    printf ("IDX %d %p\n",idx, an);
-    idx = ctr_axis_array_find (&arr, 1003, &an);
-    printf ("IDX %d %p\n",idx, an);
-    idx = ctr_axis_array_find (&arr, 11, &an);
-    printf ("IDX %d %p\n",idx, an);
-    idx = ctr_axis_array_find (&arr, 3, &an);
-    printf ("IDX %d %p\n",idx, an);
-    idx = ctr_axis_array_find (&arr, 0, &an);
-    printf ("IDX %d %p\n",idx, an);
-    idx = ctr_axis_array_find (&arr, 320, &an);
-    printf ("IDX %d %p\n",idx, an);
-
-    void *ptr = ctr_axis_array_remove_at (&arr, 2);
-    printf ("removed %p\n", ptr),
-    ctr_axis_array_dump (&arr);
-    ptr = ctr_axis_array_remove_at (&arr, 0);
-    printf ("removed %p\n", ptr),
-    ctr_axis_array_dump (&arr);
-    ptr = ctr_axis_array_remove_at (&arr, 3);
-    printf ("removed %p\n", ptr),
-    ctr_axis_array_dump (&arr);
-
-    ctr_axis_remove (&arr, 100);
-    ctr_axis_remove (&arr, 320);
-    ctr_axis_remove (&arr, 10);
-    ctr_axis_array_dump (&arr);
-    ctr_axis_add (&arr, 9, (void *) 9);
-    ctr_axis_add (&arr, 320, (void *) 320);
-    idx = ctr_axis_array_find (&arr, 11, &an);
-    printf ("IDX %d %p\n",idx, an);
-    idx = ctr_axis_array_find (&arr, 0, &an);
-    printf ("IDX %d %p\n",idx, an);
-    idx = ctr_axis_array_find (&arr, 400, &an);
-    printf ("IDX %d %p\n",idx, an);
-    ctr_axis_add (&arr, 11, (void *) 11);
-    ctr_axis_add (&arr, 10, (void *) 10);
-    ctr_axis_add (&arr, 0, (void *) 0);
-    ctr_axis_add (&arr, 50, (void *) 50);
-    ctr_axis_array_dump (&arr);
-    ctr_axis_remove (&arr, 12);
-    ctr_axis_remove (&arr, 50);
-    ctr_axis_remove (&arr, 0);
-    ctr_axis_remove (&arr, 320);
-    ctr_axis_array_dump (&arr);
-
-    ctr_world_init ();
-    printf ("WORLD TEST\n\n");
-
-    printf ("*********** ADD 0, 0, 0\n");
-    ctr_chunk *chnk = ctr_world_chunk (0, 0, 0, 1);
-    assert (chnk);
-    ctr_world_dump ();
-    printf ("*********** ADD 0, 0, 1\n");
-    chnk = ctr_world_chunk (0, 0, 1, 1);
-    assert (chnk);
-    ctr_world_dump ();
-    printf ("*********** ADD 2, 3, 1\n");
-    chnk = ctr_world_chunk (2, 3, 1, 1);
-    assert (chnk);
-    ctr_world_dump ();
-
-
 void ctr_world_query_load_chunks (int alloc = 0);
 
 void ctr_world_query_set_at (unsigned int rel_x, unsigned int rel_y, unsigned int rel_z, AV *cell)
@@ -624,7 +578,7 @@ AV *ctr_world_get_pattern (int x, int y, int z, int mutate)
     int cx = x, cy = y, cz = z;
     ctr_world_query_abs2rel (&cx, &cy, &cz);
 
-    printf ("QUERY AT %d %d %d\n", cx, cy, cz);
+    //d// printf ("QUERY AT %d %d %d\n", cx, cy, cz);
 
     // find lowest cx/cz coord with constr. floor
     ctr_cell *cur = ctr_world_query_cell_at (cx, cy, cz, 0);
@@ -640,12 +594,11 @@ AV *ctr_world_get_pattern (int x, int y, int z, int mutate)
     while (cur && cur->type == 36)
       {
         cz--;
-        printf ("CZ %d\n", cz);
         cur = ctr_world_query_cell_at (cx, cy, cz, 0);
       }
     cz++;
 
-    printf ("MINX FOUND %d %d\n", cx, cz);
+    //d// printf ("MINX FOUND %d %d\n", cx, cz);
 
     // find out how large the floor is
     int dim;
@@ -658,7 +611,7 @@ AV *ctr_world_get_pattern (int x, int y, int z, int mutate)
           for (dz = 0; dz < dim; dz++)
             {
               ctr_cell *cur = ctr_world_query_cell_at (cx + dx, cy, cz + dz, 0);
-              printf ("TXT[%d] %d %d %d: %d\n", dim, cx + dx, cy, cz + dz, cur->type);
+              //d// printf ("TXT[%d] %d %d %d: %d\n", dim, cx + dx, cy, cz + dz, cur->type);
               if (!cur || cur->type != 36)
                 no_floor = 1;
             }
@@ -672,7 +625,7 @@ AV *ctr_world_get_pattern (int x, int y, int z, int mutate)
         XSRETURN_UNDEF;
       }
 
-    printf ("floor dimension: %d\n", dim);
+    //d// printf ("floor dimension: %d\n", dim);
     // next: search first x/z coord with a block over it
     int min_x = 100, min_y = 100, min_z = 100, max_x = 0, max_y = 0, max_z = 0;
     int dx, dy, dz;
@@ -717,7 +670,7 @@ AV *ctr_world_get_pattern (int x, int y, int z, int mutate)
     if (((max_z - min_z) + 1) > dim)
       dim = (max_z - min_z) + 1;
 
-    printf ("FOUND MIN MAX %d %d %d, %d %d %d, dimension: %d\n", min_x, min_y, min_z, max_x, max_y, max_z, dim);
+    //d// printf ("FOUND MIN MAX %d %d %d, %d %d %d, dimension: %d\n", min_x, min_y, min_z, max_x, max_y, max_z, dim);
 
     if (!mutate)
       av_push (RETVAL, newSViv (dim));
@@ -967,15 +920,9 @@ void *region_new_from_vol_draw_dst ()
        malloc ((sizeof (double) * DRAW_CTX.size * DRAW_CTX.size * DRAW_CTX.size) + 1);
     RETVAL = region;
 
-    printf ("REG %p %d\n", region, DRAW_CTX.size);
     region[0] = DRAW_CTX.size;
     region++;
     vol_draw_copy (region);
-    printf ("REGVALUES: %f\n", region[0]);
-    printf ("REGVALUES: %f\n", region[1]);
-    printf ("REGVALUES: %f\n", region[99]);
-    printf ("REGVALUES: %f\n", region[99 * 100]);
-    printf ("REGVALUES: %f\n", region[100]);
 
   OUTPUT:
     RETVAL
@@ -996,7 +943,7 @@ AV *region_get_nearest_sector_in_range (void *reg, int x, int y, int z, double a
      sv_2mortal ((SV *)RETVAL);
 
      int rad;
-     for (rad = 1; rad < (reg_size / 2); rad++)
+     for (rad = 1; rad < 200; rad++)
        {
          int fnd = 0;
          int dx, dy, dz;
@@ -1007,13 +954,8 @@ AV *region_get_nearest_sector_in_range (void *reg, int x, int y, int z, double a
                  int ox = x + dx,
                      oy = y + dy,
                      oz = z + dz;
-                 if (ox < 0) ox = -ox;
-                 if (oy < 0) oy = -oy;
-                 if (oz < 0) oz = -oz;
-                 ox %= reg_size;
-                 oy %= reg_size;
-                 oz %= reg_size;
-                 double v = region[ox + oy * reg_size + oz * reg_size * reg_size];
+
+                 double v = region_get_sector_value (reg, ox, oy, oz);
                  if (v < a || v >= b)
                    continue;
 
@@ -1030,25 +972,4 @@ AV *region_get_nearest_sector_in_range (void *reg, int x, int y, int z, double a
   OUTPUT:
     RETVAL
 
-double region_get_sector_value (void *reg, int x, int y, int z)
-  CODE:
-    if (!reg)
-      XSRETURN_UNDEF;
-
-    double *region = reg;
-    int reg_size = region[0];
-    region++;
-
-    if (x < 0) x = -x;
-    if (y < 0) y = -y;
-    if (z < 0) z = -z;
-    x %= reg_size;
-    y %= reg_size;
-    z %= reg_size;
-
-    double xv = region[x + y * reg_size + z * reg_size * reg_size];
-    //d// printf ("REGGET %p %d %d %d %d => %f\n", reg, reg_size, x, y, z, xv);
-    RETVAL = xv;
-
-  OUTPUT:
-    RETVAL
+double region_get_sector_value (void *reg, int x, int y, int z);

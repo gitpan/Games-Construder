@@ -1,0 +1,39 @@
+---
+abstract: 'A 3D game written in Perl, which is actually playable!'
+author:
+  - 'Robin Redeker <elmex@ta-sa.org>'
+build_requires:
+  ExtUtils::MakeMaker: 0
+configure_requires:
+  Alien::SDL: 0
+  File::ShareDir::Install: 0
+  OpenGL: 0
+dynamic_config: 1
+generated_by: 'ExtUtils::MakeMaker version 6.58, CPAN::Meta::Converter version 2.110930001'
+license: open_source
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Games-Construder
+no_index:
+  directory:
+    - t
+    - inc
+requires:
+  Alien::SDL: 0
+  AnyEvent: 0
+  Compress::LZF: 0
+  File::ShareDir::Install: 0
+  File::ShareDir::PAR: 0
+  JSON: 0
+  Math::Trig: 0
+  Object::Event: 0
+  OpenGL: 0
+  OpenGL::List: 0
+  SDL: 0
+  Storable: 0
+  Test::More: 0
+  common::sense: 0
+resources:
+  homepage: http://ue.o---o.eu/
+version: 0.94
