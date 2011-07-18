@@ -42,6 +42,7 @@ void ctr_axis_array_grow (ctr_axis_array *arr, unsigned int min_size)
     {
       arr->alloc = 64;
       arr->nodes = safemalloc (sizeof (ctr_axis_node) * arr->alloc);
+      ctr_prof_cnt.allocated_axises_size += sizeof (ctr_axis_node) * arr->alloc;
       memset (arr->nodes, 0, sizeof (ctr_axis_node) * arr->alloc);
       arr->len = 0;
       return;
@@ -49,10 +50,13 @@ void ctr_axis_array_grow (ctr_axis_array *arr, unsigned int min_size)
 
   unsigned int oa = arr->alloc;
 
+  ctr_prof_cnt.allocated_axises_size -= sizeof (ctr_axis_node) * arr->alloc;
+
   while (arr->alloc < min_size)
     arr->alloc *= 2;
 
   ctr_axis_node *newnodes = safemalloc (sizeof (ctr_axis_node) * arr->alloc);
+  ctr_prof_cnt.allocated_axises_size += sizeof (ctr_axis_node) * arr->alloc;
   assert (newnodes);
   memset (newnodes, 0, sizeof (ctr_axis_node) * arr->alloc);
   memcpy (newnodes, arr->nodes, sizeof (ctr_axis_node) * oa);
@@ -63,11 +67,24 @@ void ctr_axis_array_grow (ctr_axis_array *arr, unsigned int min_size)
 ctr_axis_array *ctr_axis_array_new ()
 {
   ctr_axis_array *na = safemalloc (sizeof (ctr_axis_array));
+  ctr_prof_cnt.allocated_axises++;
   memset (na, 0, sizeof (ctr_axis_array));
-  na->len = 0;
-  na->alloc = 0;
   ctr_axis_array_grow (na, 1);
   return na;
+}
+
+int ctr_axis_empty (ctr_axis_array *a)
+{
+  return a->len == 0;
+}
+
+void ctr_axis_array_free (ctr_axis_array *a)
+{
+  ctr_prof_cnt.allocated_axises_size -= sizeof (ctr_axis_node) * a->alloc;
+  ctr_prof_cnt.allocated_axises--;
+  if (a->nodes)
+    safefree (a->nodes);
+  safefree (a);
 }
 
 void ctr_axis_array_dump (ctr_axis_array *arr)

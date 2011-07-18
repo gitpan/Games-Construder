@@ -27,6 +27,7 @@ lib/Games/Construder/Server/World.pm
 lib/Games/Construder/Server/PCB.pm
 lib/Games/Construder/Vector.pm
 noise_3d.c
+counters.c
 light.c
 queue.c
 render.c
@@ -67,5 +68,4 @@ res/voldraw/sector_E1234.cmds
 res/voldraw/sector_F.cmds
 res/voldraw/sector_X.cmds
 res/voldraw/sector_Z.cmds
-META.yml                                 Module YAML meta-data (added by MakeMaker)
-META.json                                Module JSON meta-data (added by MakeMaker)
+META.yml                                 Module meta-data (added by MakeMaker)

@@ -5,12 +5,16 @@
 #include <stdio.h>
 #include <math.h>
 
+#include "counters.c"
 #include "vectorlib.c"
 #include "world.c"
 #include "world_drawing.c"
 #include "render.c"
 #include "volume_draw.c"
 #include "light.c"
+
+
+unsigned char *ctr_chunk_read_data[CHUNK_ALEN * 4];
 
 double region_get_sector_value (void *reg, int x, int y, int z)
 {
@@ -228,9 +232,31 @@ void ctr_render_set_ambient_light (double l)
 
 MODULE = Games::Construder PACKAGE = Games::Construder::World PREFIX = ctr_world_
 
+AV *
+ctr_world_get_prof_counters ()
+  CODE:
+    RETVAL = newAV ();
+    sv_2mortal ((SV *)RETVAL);
+
+    av_push (RETVAL, newSViv (ctr_prof_cnt.chunk_changes));
+    av_push (RETVAL, newSViv (ctr_prof_cnt.active_cell_changes));
+    av_push (RETVAL, newSViv (ctr_prof_cnt.allocated_axises));
+    av_push (RETVAL, newSViv (ctr_prof_cnt.allocated_axises_size));
+    av_push (RETVAL, newSViv (ctr_prof_cnt.noise_cnt));
+    av_push (RETVAL, newSViv (ctr_prof_cnt.noise_size));
+    av_push (RETVAL, newSViv (ctr_prof_cnt.dyn_buf_cnt));
+    av_push (RETVAL, newSViv (ctr_prof_cnt.dyn_buf_size));
+    av_push (RETVAL, newSViv (ctr_prof_cnt.geom_cnt));
+    av_push (RETVAL, newSViv (ctr_prof_cnt.allocated_chunks));
+
+  OUTPUT:
+    RETVAL
+
+
 void ctr_world_init (SV *change_cb, SV *cell_change_cb)
   CODE:
      ctr_world_init ();
+     ctr_prof_init ();
      SvREFCNT_inc (change_cb);
      WORLD.chunk_change_cb = change_cb;
      SvREFCNT_inc (cell_change_cb);
@@ -255,11 +281,8 @@ ctr_world_get_chunk_data (int x, int y, int z)
       }
 
     int len = CHUNK_ALEN * 4;
-    unsigned char *data = malloc (sizeof (unsigned char) * len);
-    ctr_world_get_chunk_data (chnk, data);
-
-    RETVAL = newSVpv (data, len);
-    free (data);
+    ctr_world_get_chunk_data (chnk, (unsigned char *) &ctr_chunk_read_data);
+    RETVAL = newSVpv ((unsigned char *) &ctr_chunk_read_data, len);
   OUTPUT:
     RETVAL
 
@@ -282,20 +305,6 @@ int ctr_world_set_chunk_data (int x, int y, int z, unsigned char *data, unsigned
     ctr_world_emit_chunk_change (x, y, z);
 
     //d// ctr_world_dump ();
-
-    /*
-    unsigned char *datac = malloc (sizeof (unsigned char) * lenc);
-    ctr_world_get_chunk_data (chnk, datac);
-    int i;
-    for (i = 0; i < lenc; i++)
-      {
-        if (data[i] != datac[i])
-          {
-            printf ("BUG! AT %d %x %d\n", i, data[i], datac[i]);
-            exit (1);
-          }
-      }
-    */
   OUTPUT:
     RETVAL
 
@@ -917,7 +926,7 @@ MODULE = Games::Construder PACKAGE = Games::Construder::Region PREFIX = region_
 void *region_new_from_vol_draw_dst ()
   CODE:
     double *region =
-       malloc ((sizeof (double) * DRAW_CTX.size * DRAW_CTX.size * DRAW_CTX.size) + 1);
+       safemalloc ((sizeof (double) * DRAW_CTX.size * DRAW_CTX.size * DRAW_CTX.size) + 1);
     RETVAL = region;
 
     region[0] = DRAW_CTX.size;

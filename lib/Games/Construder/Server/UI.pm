@@ -249,8 +249,6 @@ sub commands {
 sub handle_command {
    my ($self, $cmd, $arg, $pos) = @_;
 
-   warn "CMD @_\n";
-
    if ($cmd =~ /slot_(\d+)/) {
       $self->{pl}->{data}->{slots}->{selected} = $1;
       $self->show;
@@ -263,6 +261,7 @@ sub layout {
    my $slots = $self->{pl}->{data}->{slots};
 
    my @slots;
+   my $selected_type;
    for (my $i = 0; $i < 10; $i++) {
       my $invid = $slots->{selection}->[$i];
 
@@ -273,23 +272,31 @@ sub layout {
       }
 
       my ($type, $invid) = $self->{pl}->{inv}->split_invid ($invid);
+      if ($slots->{selected} == $i) {
+         $selected_type = $type;
+      }
 
       push @slots,
-      ui_hlt_border (($i == $slots->{selected}),
-         [box => { padding => 2, align => "center" },
-           [model => { color => "#00ff00", width => 30 }, $type]],
-         [text => { font => "small",
-                    color =>
-                       (!defined ($cnt) || $cnt <= 0) ? "#990000" : "#999999",
-                    align => "center" },
-          sprintf ("[%d] %d", $i + 1, $cnt * 1)]
-      );
+         ui_hlt_border (($i == $slots->{selected}),
+            [box => { padding => 2, align => "center" },
+              [model => { color => "#00ff00", width => 30 }, $type]],
+            [text => { font => "small",
+                       color =>
+                          (!defined ($cnt) || $cnt <= 0) ? "#990000" : "#999999",
+                       align => "center" },
+             sprintf ("[%d] %d", $i + 1, $cnt * 1)]
+         );
    }
    my @grid;
    $grid[0] = [splice @slots, 0, 5, ()];
    $grid[1] = \@slots;
 
+   my $obj =
+      $Games::Construder::Server::RES->get_object_by_type ($selected_type)
+         if $selected_type;
+
    ui_hud_window ([left => "down"],
+      $obj ? (ui_small_text ("Selected: " . $obj->{name})) : (),
       [box => { dir => "hor" }, @{$grid[0]}],
       [box => { dir => "hor" }, @{$grid[1]}]
    )
@@ -483,7 +490,6 @@ sub layout {
       my $wself = $self;
       weaken $wself;
       $self->{bio_intake} = $bio_usage;
-      warn "BIO INTKE @$bio_usage\n";
       $self->{bio_intake_tmr} = AE::timer 2, 0, sub {
          delete $wself->{bio_intake};
          $wself->show;
@@ -917,8 +923,6 @@ sub handle_command {
 
 sub layout {
    my ($self, $type, $ent) = @_;
-
-   warn "LAYOUT MATVIEW $type | $ent\n";
 
    $self->{invid} = $type;
    my ($type, $invid) = $self->{pl}->{inv}->split_invid ($type);
@@ -1878,7 +1882,6 @@ sub handle_command {
 
 sub layout {
    my ($self, $pos, $entity) = @_;
-   warn "LAYOUt PSTOR $entity\n";
    $self->{pat_stor} = [$pos, $entity] if $pos;
    ($pos, $entity) = @{$self->{pat_stor}};
 
@@ -2342,6 +2345,60 @@ REF
       )
    }
 }
+
+package Games::Construder::Server::UI::Jumper;
+use Games::Construder::UI;
+
+use base qw/Games::Construder::Server::UI/;
+
+sub commands {
+   (
+      return => "activate"
+   )
+}
+
+sub handle_command {
+   my ($self, $cmd, $arg) = @_;
+
+   if ($cmd eq 'activate') {
+      $self->{entity}->{time_active} = 1;
+      $self->{entity}->{disp_vec} =
+         [$arg->{xdisp}, $arg->{ydisp}, $arg->{zdisp}];
+      $self->hide;
+   }
+}
+
+sub layout {
+   my ($self, $type, $entity) = @_;
+
+   $self->{entity} = $entity;
+
+   my $obj =
+      $Games::Construder::Server::RES->get_object_by_type ($type);
+
+   my $r = $entity->{range};
+
+   ui_window ($obj->{name},
+      ui_desc ("Enter displacement direction:"),
+      ui_subdesc ("Range: " . $entity->{range} . " sectors"),
+      ui_subdesc ("Accuracy: " . (100 * $entity->{accuracy}) . "%"),
+      ui_subdesc ("Malfunction: " . (100 * $entity->{fail_chance}) . "%"),
+      ui_pad_box (hor =>
+         ui_text ("X"),
+         ui_range (xdisp => -$r, $r, $r > 40 ? 5 : 1, "%d", 0),
+      ),
+      ui_pad_box (hor =>
+         ui_text ("Y"),
+         ui_range (ydisp => -$r, $r, $r > 40 ? 5 : 1, "%d", 0),
+      ),
+      ui_pad_box (hor =>
+         ui_text ("Z"),
+         ui_range (zdisp => -$r, $r, $r > 40 ? 5 : 1, "%d", 0),
+      ),
+      ui_key_explain (return => "Activate jumper"),
+   )
+}
+
 
 =back
 

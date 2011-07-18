@@ -98,32 +98,50 @@ typedef struct _ctr_dyn_buf {
     unsigned int item;
 } ctr_dyn_buf;
 
+void ctr_dyn_buf_set_size (ctr_dyn_buf *db, unsigned int items)
+{
+  ctr_prof_cnt.dyn_buf_size -= db->item * db->alloc;
+
+  void *nb = safemalloc (items * db->item);
+  if (db->alloc > items)
+    memset (nb, 0, items * db->item);
+  else
+    memcpy (nb, *(db->ptr), db->alloc * db->item);
+
+  if (*(db->ptr))
+    safefree (*(db->ptr));
+  *(db->ptr) = nb;
+
+  db->alloc = items;
+
+  ctr_prof_cnt.dyn_buf_size += db->item * db->alloc;
+}
+
 void ctr_dyn_buf_init (ctr_dyn_buf *db, GLfloat **ptr, unsigned int pa_items,
                        unsigned int item_size)
 {
   db->ptr = ptr;
-  *(db->ptr) = safemalloc (pa_items * item_size);
+  *(db->ptr) = 0;
   db->item = item_size;
-  db->alloc = pa_items;
+  db->alloc = 0;
+
+  ctr_dyn_buf_set_size (db, pa_items);
+  ctr_prof_cnt.dyn_buf_cnt++;
 }
 
 void ctr_dyn_buf_grow (ctr_dyn_buf *db, unsigned int items)
 {
   if (db->alloc >= items)
     return;
-
   items *= 2;
-
-  void *nb = safemalloc (items * db->item);
-  memcpy (nb, *(db->ptr), db->alloc * db->item);
-  free (*(db->ptr));
-  *(db->ptr) = nb;
-  db->alloc = items;
+  ctr_dyn_buf_set_size (db, items);
 }
 
 void ctr_dyn_buf_free (ctr_dyn_buf *db)
 {
-  free (*(db->ptr));
+  ctr_prof_cnt.dyn_buf_cnt--;
+  ctr_prof_cnt.dyn_buf_size -= db->item * db->alloc;
+  safefree (*(db->ptr));
 }
 
 /* The main data structure that holds the information to
@@ -181,7 +199,18 @@ void ctr_render_clear_geom (void *c)
   geom->zoff = 0;
 }
 
-static int cgeom = 0;
+void ctr_render_cleanup_geom (void *c)
+{
+  ctr_render_geom *geom = c;
+  ctr_render_clear_geom (c);
+#if USE_SINGLE_BUFFER
+  ctr_dyn_buf_set_size (&geom->db_geom, 10);
+#else
+  ctr_dyn_buf_set_size (&geom->db_vertexes, 10);
+  ctr_dyn_buf_set_size (&geom->db_colors, 10);
+  ctr_dyn_buf_set_size (&geom->db_uvs, 10);
+#endif
+}
 
 // FIXME: this should be dependend on the visible radisu, so we maybe want to change
 //        this value dynamically adaptively to the current usage.
@@ -201,7 +230,7 @@ void *ctr_render_new_geom ()
   else
     {
       c = safemalloc (sizeof (ctr_render_geom));
-      cgeom++;
+      ctr_prof_cnt.geom_cnt++;
       memset (c, 0, sizeof (ctr_render_geom));
       c->dl = glGenLists (1);
 
@@ -250,14 +279,16 @@ void *ctr_render_new_geom ()
 
   c->dl_dirty = 1;
 
-  //d// printf ("geoms allocated: %d x %d (prealloc %d)\n", cgeom, sizeof (ctr_render_geom), geom_last_free);
   return c;
 }
 
 void ctr_render_free_geom (void *c)
 {
   if (geom_last_free < GEOM_PRE_ALLOC)
-    geom_pre_alloc[geom_last_free++] = c;
+    {
+      geom_pre_alloc[geom_last_free++] = c;
+      ctr_render_cleanup_geom (c); // make some buffers smaller
+    }
   else
     {
       ctr_render_geom *geom = c;
@@ -281,13 +312,16 @@ void ctr_render_free_geom (void *c)
       ctr_dyn_buf_free (&geom->db_uvs);
 #endif
       safefree (geom);
-      cgeom--;
+      ctr_prof_cnt.geom_cnt--;
     }
 }
 
 // Global renderer init function. Just pre allocates stuff for now.
 void ctr_render_init ()
 {
+  if (geom_last_free > 0)
+    return;
+
   geom_last_free = 0;
 
   int i;
